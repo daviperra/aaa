@@ -1,5 +1,15 @@
 #include "carte.h"
 
+/** La funzione estrazione prende una carta dal mazzo di pesca, la controlla
+ * per restituire un valore di verita' a seconda della modalita' di estrazione e poi la scarta.
+ *
+ * @param modalita intero che indica la modalita' con cui avviene l'estrazione
+ * @param mazzoPesca mazzo di pesca
+ * @param mazzoScarti mazzo di scarti
+ * @param nomeFile nome del file log
+ * @return booleano a true o false
+**/
+
 bool estrazione(int modalita, Mazzo* mazzoPesca, Mazzo* mazzoScarti, char* nomeFile)
 {
     bool esito = false;
@@ -9,11 +19,12 @@ bool estrazione(int modalita, Mazzo* mazzoPesca, Mazzo* mazzoScarti, char* nomeF
     salvaLog("Viene estratta una carta dal mazzo.", nomeFile);
     continuo();
 
+    //allocazione mazzo temporaneo
     Mazzo* temp = (Mazzo*) malloc(sizeof(Mazzo));
     temp->carte = NULL;
     temp->numCarte = 0;
 
-    spostaCarta(mazzoPesca, NOP, temp, mazzoScarti, nomeFile);
+    daiCarta(mazzoPesca, temp, mazzoScarti, nomeFile);
 
     char seme[DIM_NOME_CARTE+1];
 
@@ -38,25 +49,36 @@ bool estrazione(int modalita, Mazzo* mazzoPesca, Mazzo* mazzoScarti, char* nomeF
 
     if(modalita == MOD_PRIGIONE || modalita == MOD_BARILE)
     {
-        if(temp->carte[idCarta].seme == CUORI)
+        /*se l'estrazione e' chiamata da prigione o barile viene
+        * controllato se la carta ha come seme cuori*/
+         if(temp->carte[idCarta].seme == CUORI)
         {
             esito = true;
         }
     }
     else
     {
+        /*se l'estrazione e' chiamata da dinamite controlla se la carta estratta
+         * e' compresa tra il 2 e il 9 di picche*/
         if(temp->carte[idCarta].seme == PICCHE && (temp->carte[idCarta].num>=MIN_DINAMITE && temp->carte[idCarta].num<=MAX_DINAMITE))
         {
             esito = true;
         }
     }
 
-    spostaCarta(temp, idCarta, mazzoScarti, NULL, nomeFile);
+    spostaCarta(temp, idCarta, mazzoScarti);
 
+    //libero mazzo temporaneo
     free(temp);
 
     return esito;
 }
+
+/** La procedura armi viene chiamata dopo che un'arma e' stata giocata
+ * e assegna al giocatore la gittata fissata per quell'arma.
+ *
+ * @param giocatore giocatore che gioca arma
+**/
 
 void armi(Giocatore* giocatore)
 {
@@ -89,6 +111,17 @@ void armi(Giocatore* giocatore)
     }
 }
 
+/** La funzione barile controlla, tramite l'estrazione di una carta dal mazzo
+ * se Barile puo' effettuare la sua funzione o no. Restituisce il booleano per il controllo.
+ *
+ * @param giocatore giocatore che ha Barile in gioco
+ * @param carta carta Barile da scartare
+ * @param mazzoPesca mazzo pesca
+ * @param mazzoScarti mazzo scarti
+ * @param nomeFile nome del file log
+ * @return booleano a true o false
+**/
+
 bool barile(Giocatore* giocatore, int carta, Mazzo* mazzoPesca, Mazzo* mazzoScarti, char* nomeFile)
 {
     bool esito = false;
@@ -103,13 +136,13 @@ bool barile(Giocatore* giocatore, int carta, Mazzo* mazzoPesca, Mazzo* mazzoScar
         salvaLog(messaggio, nomeFile);
         esito = true;
 
-        spostaCarta(&giocatore->inGioco, carta, mazzoScarti, NULL, nomeFile);
+        spostaCarta(&giocatore->inGioco, carta, mazzoScarti);
     }
     else
     {
         printf("\nNon e' uscito CUORI, BARILE non ha effetto!\n");
         salvaLog("L'estrazione non va a buon fine, Barile non ha effetto.", nomeFile);
-        spostaCarta(&giocatore->inGioco, carta, mazzoScarti, NULL, nomeFile);
+        spostaCarta(&giocatore->inGioco, carta, mazzoScarti);
     }
 
     continuo();
@@ -117,10 +150,26 @@ bool barile(Giocatore* giocatore, int carta, Mazzo* mazzoPesca, Mazzo* mazzoScar
     return esito;
 }
 
+/** La funzione dinamite controlla, tramite l'estrazione di una carta dal mazzo
+ * se la dinamite esplode o no. Se si, fa danno al giocatore che puo' giocare una birra
+ * in extremis nel caso in cui i suoi punti vita scendono a zero. Puo' anche venire eliminato
+ * e il colpevole dell'eliminazione non sarà nessuno, in quel caso verrà restituito true cosicche'
+ * il giocatore eliminato non possa giocare per errore il proprio turno. Se non viene eliminato restituisce false.
+ * Se invece la dinamite non esplode questa viene passata al giocatore successivo nel party.
+ *
+ * @param giocatore giocatore che ha Barile in gioco
+ * @param carta carta Barile da scartare
+ * @param mazzoPesca mazzo pesca
+ * @param mazzoScarti mazzo scarti
+ * @param nomeFile nome del file log
+ * @return booleano a true o false
+**/
+
 bool dinamite(Giocatore* party, int* nGiocatori, Giocatore* giocatore, Mazzo* mazzoPesca, Mazzo* mazzoScarti, int carta, char* nomeFile)
 {
     bool check = false;
 
+    //creo giocatore temporaneo per non chiamare malus o bonus in eliminazione
     Giocatore* dinamite = (Giocatore*) malloc(sizeof(Giocatore));
     strcpy(dinamite->nome, DINAMITE);
 
@@ -128,8 +177,11 @@ bool dinamite(Giocatore* party, int* nGiocatori, Giocatore* giocatore, Mazzo* ma
     {
         printf("\nLa DINAMITE esplode!\n");
 
-        spostaCarta(&giocatore->inGioco, carta, mazzoScarti, NULL, nomeFile);
+        spostaCarta(&giocatore->inGioco, carta, mazzoScarti);
 
+        /*se il giocatore ha meno punti vita rispetto al danno arrecato dalla
+         *dinamite puo' giocare una birra in extremis se la ha
+         * se no subisce il danno e viene eliminato*/
         if(giocatore->pallottole <= DANNO_DINAMITE)
         {
             giocatore->pallottole = 0;
@@ -147,7 +199,7 @@ bool dinamite(Giocatore* party, int* nGiocatori, Giocatore* giocatore, Mazzo* ma
 
                 if(birraExtremis(giocatore, nomeFile))
                 {
-                    spostaCarta(&giocatore->mano, idBirra, mazzoScarti, NULL, nomeFile);
+                    spostaCarta(&giocatore->mano, idBirra, mazzoScarti);
                     (giocatore->pallottole)++;
                 }
                 else
@@ -182,15 +234,17 @@ bool dinamite(Giocatore* party, int* nGiocatori, Giocatore* giocatore, Mazzo* ma
                 idGiocatore = i;
         }
 
+
+        //dinamite passa al giocatore successivo
         if(idGiocatore == (*nGiocatori)-1)
         {
-            spostaCarta(&giocatore->inGioco, carta, &party[PRIMO].inGioco, NULL, nomeFile);
+            spostaCarta(&giocatore->inGioco, carta, &party[PRIMO].inGioco);
             strcat(messaggio, " a ");
             strcat(messaggio, party[PRIMO].nome);
         }
         else
         {
-            spostaCarta(&giocatore->inGioco, carta, &party[idGiocatore+1].inGioco, NULL, nomeFile);
+            spostaCarta(&giocatore->inGioco, carta, &party[idGiocatore+1].inGioco);
             strcat(messaggio, " a ");
             strcat(messaggio, party[idGiocatore+1].nome);
         }
@@ -198,6 +252,7 @@ bool dinamite(Giocatore* party, int* nGiocatori, Giocatore* giocatore, Mazzo* ma
         salvaLog(messaggio, nomeFile);
     }
 
+    //liberazione giocatore temporaneo
     free(dinamite);
 
     continuo();
@@ -205,6 +260,18 @@ bool dinamite(Giocatore* party, int* nGiocatori, Giocatore* giocatore, Mazzo* ma
 
     return check;
 }
+
+/** La funzione prigione viene chiamata quando un giocatore a inizio del proprio turno ha in gioco
+ * una carta prigione. Procede all'estrazione di una carta dal mazzo, se l'estrazione ha esito positivo
+ * il giocatore esce di prigione e gioca il proprio turno, se no lo salta. Viene restituito
+ * valore di verita' che dipende dall'esito dell'estrazione.
+ *
+ * @param giocatore
+ * @param mazzoPesca
+ * @param mazzoScarti
+ * @param nomeFile
+ * @return
+**/
 
 bool prigione(Giocatore* giocatore, Mazzo* mazzoPesca, Mazzo* mazzoScarti, char* nomeFile)
 {
@@ -231,12 +298,21 @@ bool prigione(Giocatore* giocatore, Mazzo* mazzoPesca, Mazzo* mazzoScarti, char*
         }
     }
 
-    spostaCarta(&giocatore->inGioco, idPrigione, mazzoScarti, NULL, nomeFile);
+    //scarto la carta prigione
+    spostaCarta(&giocatore->inGioco, idPrigione, mazzoScarti);
 
     continuo();
     pulisciSchermo();
     return esito;
 }
+
+/** La procedura giocaBarile permette di mettere la carta Barile tra le proprie
+ * carte in gioco, cosi' da potersi difendere nel caso si e' vittima di un bang.
+ *
+ * @param giocatore giocatore che gioca barile
+ * @param carta id della carta barile
+ * @param nomeFile nome file log
+**/
 
 void giocaBarile(Giocatore* giocatore, int carta, char* nomeFile)
 {
@@ -246,8 +322,17 @@ void giocaBarile(Giocatore* giocatore, int carta, char* nomeFile)
     strcat(messaggio, "gioca Barile.");
     salvaLog(messaggio, nomeFile);
     continuo();
-    spostaCarta(&giocatore->mano, carta, &giocatore->inGioco, NULL, nomeFile);
+    spostaCarta(&giocatore->mano, carta, &giocatore->inGioco);
 }
+
+/** La procedura giocaDinamite permette di mettere la carta Dinamite tra le proprie
+ * carte in gioco, cosi' da poter passare la dinamite e arrecare danno a altri
+ * giocatori in caso si sia fortunati con l'estrazione.
+ *
+ * @param giocatore giocatore che gioca dinamite
+ * @param carta id della carta dinamite
+ * @param nomeFile nome file log
+**/
 
 void giocaDinamite(Giocatore* giocatore, int carta, char* nomeFile)
 {
@@ -257,8 +342,19 @@ void giocaDinamite(Giocatore* giocatore, int carta, char* nomeFile)
     strcat(messaggio, "gioca Dinamite.");
     salvaLog(messaggio, nomeFile);
     continuo();
-    spostaCarta(&giocatore->mano, carta, &giocatore->inGioco, NULL, nomeFile);
+    spostaCarta(&giocatore->mano, carta, &giocatore->inGioco);
 }
+
+/** La procedura giocaBarile permette di mettere la carta Prigione tra le
+ * carte in gioco di un avversario a scelta, cosi' da metterlo in prigione e a costringerlo a estrarre
+ * per poter giocare il proprio tunro.
+ *
+ * @param party party di giocatori
+ * @param nGiocatori numero dei giocatori
+ * @param giocatore giocatore che gioca Prigione
+ * @param carta id della carta prigione
+ * @param nomeFile nome del file log
+**/
 
 void giocaPrigione(Giocatore* party, int nGiocatori, Giocatore* giocatore, int carta, char* nomeFile)
 {
@@ -301,9 +397,19 @@ void giocaPrigione(Giocatore* party, int nGiocatori, Giocatore* giocatore, int c
         strcat(messaggio, " gioca Prigione su ");
         strcat(messaggio, party[scelta].nome);
         salvaLog(messaggio, nomeFile);
-        spostaCarta(&giocatore->mano, carta, &party[scelta].inGioco, NULL, nomeFile);
+        spostaCarta(&giocatore->mano, carta, &party[scelta].inGioco);
     }
 }
+
+/** La procedura giocaArma permette di mettere in gioco una carta arma cosi' da
+ * poter aumentare la propria gittata in base all'arma giocata. Se ha un'altra arma in gioco
+ * questa verra' scartata per far posto alla nuova arma.
+ *
+ * @param giocatore giocatore che gioca arma
+ * @param carta id carta arma
+ * @param mazzoScarti mazzo di scarti
+ * @param nomeFile nome file log
+**/
 
 void giocaArma(Giocatore* giocatore, int carta, Mazzo* mazzoScarti, char* nomeFile)
 {
@@ -341,7 +447,7 @@ void giocaArma(Giocatore* giocatore, int carta, Mazzo* mazzoScarti, char* nomeFi
     if(idArma != NOP)
     {
         printf("\n\nHai un'altra arma in gioco, questa viene scartata e sostituita con l'arma da giocare.\n\n");
-        spostaCarta(&giocatore->inGioco, idArma, mazzoScarti, NULL, nomeFile);
+        spostaCarta(&giocatore->inGioco, idArma, mazzoScarti);
         char messaggio[MEX_DIM] = "";
         strcat(messaggio, giocatore->nome);
         strcat(messaggio, " scarta ");
@@ -360,14 +466,30 @@ void giocaArma(Giocatore* giocatore, int carta, Mazzo* mazzoScarti, char* nomeFi
         salvaLog(messaggio, nomeFile);
     }
 
-    spostaCarta(&giocatore->mano, carta, &giocatore->inGioco, NULL, nomeFile);
+    spostaCarta(&giocatore->mano, carta, &giocatore->inGioco);
 
     continuo();
     pulisciSchermo();
 }
 
+/** La procedura giocaCartaBlu permette di mettere in gioco una carta tra armi e effetti.
+ * Nel caso in cui sia un'arma a essere giocata verra' chiamata giocaArma e poi armi per modificare
+ * la gittata del giocatore. Se viene giocata prigione, dinamite o barile verra' chiamata la rispettiva
+ * procedura, se no giocaCartaBlu si occupera' di mettere in gioco le carte mirino o mustang.
+ *
+ * @param party party di giocatori
+ * @param nGiocatori numero di giocatori
+ * @param giocatore giocatore a giocare la carta
+ * @param carta id della carta da giocare
+ * @param mazzoScarti mazzo di scarti
+ * @param nomeFile nome file log
+**/
+
 void giocaCartaBlu(Giocatore* party, int nGiocatori, Giocatore* giocatore, int carta, Mazzo* mazzoScarti, char* nomeFile)
 {
+    // pulisco il buffer di input
+    getchar();
+
     if(giocatore->mano.carte[carta].tipoC == ARMA)
     {
         giocaArma(giocatore, carta, mazzoScarti, nomeFile);
@@ -394,7 +516,9 @@ void giocaCartaBlu(Giocatore* party, int nGiocatori, Giocatore* giocatore, int c
             strcat(messaggio, giocatore->nome);
             strcat(messaggio, " gioca Mustang.");
             salvaLog(messaggio, nomeFile);
-            spostaCarta(&giocatore->mano, carta, &giocatore->inGioco, NULL, nomeFile);
+
+            // metto mustang in gioco
+            spostaCarta(&giocatore->mano, carta, &giocatore->inGioco);
 
             continuo();
             pulisciSchermo();
@@ -406,7 +530,9 @@ void giocaCartaBlu(Giocatore* party, int nGiocatori, Giocatore* giocatore, int c
             strcat(messaggio, giocatore->nome);
             strcat(messaggio, " gioca Mirino.");
             salvaLog(messaggio, nomeFile);
-            spostaCarta(&giocatore->mano, carta, &giocatore->inGioco, NULL, nomeFile);
+
+            // metto mirino in gioco
+            spostaCarta(&giocatore->mano, carta, &giocatore->inGioco);
 
             continuo();
             pulisciSchermo();
